@@ -34,3 +34,12 @@ def cleantext_to_matrix(cleantext):
         matrix[alphabet.index(char), i] = True
 
     return matrix
+
+
+def matrix_to_cleantext(matrix):
+
+    text = ""
+    for col in range(matrix.shape[1]):
+        char = alphabet[np.where(matrix[:, col])[0][0]]
+        text += char
+    return text
