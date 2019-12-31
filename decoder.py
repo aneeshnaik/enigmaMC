@@ -1,100 +1,74 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Tue Dec 17 21:32:54 2019
+Created on Thu Dec 19 15:17:44 2019
 
 @author: aneeshnaik
 """
-
-f = open("text_original.txt", 'r')
-text_enc = f.readline()
-f.close()
-alphabet = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-            'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+from walker import Walker
+from text_utils import clean, cleantext_to_matrix
+from quadscore import QuadScore
+import numpy as np
 
 
-def check_cipher(cipher):
-    """
-    Check that values in cipher are all lowercase alphabets, and no values are
-    repeated (i.e. check one-to-one not many-to-one)
-    """
-    vals = []
-    for val in cipher.values():
-        if val is not None:
-            assert val in alphabet, "Unrecognised value: "+val
-            assert val not in vals, "Repeated value in cipher: "+val
-            vals.append(val)
+class Decoder:
+    def __init__(self, ciphertext):
+        """
+        Main object that runs the MCMC algorithm. Primary function is the run()
+        function.
 
-    return
+        Parameters
+        ----------
+        ciphertext : str
+            A single string containing the whole ciphertext
 
+        Attributes
+        ----------
+        ct_orig : str
+            The original ciphertext, as in parameters.
+        ct_clean : str
+            The original ciphertext, but all-caps and non-alphabet characters
+            removed.
+        ct_matrix : numpy array, shape (26, len(ct_clean))
+            The cleaned ciphertext (ct_clean), recasted into a numpy array.
+            Each column of the array represents a character of the ciphertext
+            as a 26-element vector of boolean 0s, with a 1 indicating the
+            character.
 
-def decrypt(code, cipher):
-    """
-    Given cipher (dict), decrypt code (str) and spit out decoded text (str)
-    """
+        Functions
+        ---------
+        lnprob :
+            Calculate the log-probability associated with a given mapping.
+        run :
+            Run the MCMC.
+        """
+        self.ct_orig = ciphertext
+        self.ct_clean = clean(ciphertext)
+        self.ct_matrix = cleantext_to_matrix(self.ct_clean)
 
-    decoded = ""
-    for char in code:
-        if char in alphabet:
-            val = cipher[char]
-            if val is None:
-                decoded += '*'
-            else:
-                decoded += val
-        elif char.swapcase() in alphabet:
-            val = cipher[char.swapcase()]
-            if val is None:
-                decoded += '*'
-            else:
-                decoded += val.swapcase()
-        else:
-            decoded += char
+        self._qs = QuadScore()
 
-    return decoded
+        return
 
+    def lnprob(self, theta):
+        lnp = self._qs.lnprob(np.matmul(theta, self.ct_matrix))
+        return lnp
 
-def freq_analysis(code):
-    frequencies = {x: 0 for x in alphabet}
-    for char in code:
-        if char in alphabet:
-            frequencies[char] += 1
-        elif char.swapcase in alphabet:
-            frequencies[char.swapcase] += 1
-    return frequencies
+    def initial_mapping():
 
+        return
 
-# key: val represents encrypted char: decrypted char
-cipher = {'a': None,
-          'b': 'a',
-          'c': None,
-          'd': None,
-          'e': None,
-          'f': None,
-          'g': 'n',
-          'h': None,
-          'i': None,
-          'j': None,
-          'k': None,
-          'l': None,
-          'm': None,
-          'n': None,
-          'o': None,
-          'p': 'e',
-          'q': None,
-          'r': None,
-          's': None,
-          't': 'o',
-          'u': 't',
-          'v': 's',
-          'w': None,
-          'x': None,
-          'y': None,
-          'z': None,
-          }
+    def run(self, niter=50000):
 
+        self.p0 = np.identity(26, dtype=bool)
+        self.chain = np.zeros((niter+1, 26, 26), dtype=bool)
+        self.probchain = np.zeros((niter+1))
+        self.chain[0] = self.p0
+        self.probchain[0] = self.lnprob(self.p0)
+        w1 = Walker(p0=self.p0, k=30, lnprobfunc=self.lnprob)
 
-freqs = freq_analysis(code)
-print(sorted(freqs, key=freqs.get, reverse=True))
-check_cipher(cipher)
-text_dec = decrypt(text_enc, cipher)
-print(text_dec)
+        for i in range(niter):
+            w1.iterate()
+            self.chain[i+1] = w1.p
+            self.probchain[i+1] = w1.lnprob
+        return
